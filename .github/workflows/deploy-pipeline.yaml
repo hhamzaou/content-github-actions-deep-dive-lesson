@@ -45,7 +45,7 @@ jobs:
           name: zipped-bundle
           path: ${{ github.sha }}.zip
   publish:
-      permissions: read-all
+      permissions: write-all
       runs-on: ubuntu-latest
       steps:
         - name: create a release
