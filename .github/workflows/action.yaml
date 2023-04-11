@@ -66,11 +66,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - name: Upload to S3
-        run: aws s3 cp ${{ github.sha }}.zip s3://my-bucket-artifacts-github-actions-1/${{ github.repository }}/${{ github.sha }}.zip
+        run: aws s3 cp ${{ github.sha }}.zip s3://my-bucket-artifacts-github-actions-2/${{ github.repository }}/${{ github.sha }}.zip
   
   test:
     runs-on: ubuntu-latest
     needs: upload
+    strategy:
+      matrix:
+        input: ["Hello", "Hi"]
     steps:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
@@ -80,10 +83,18 @@ jobs:
         aws-region: us-east-1
     - name: Create test function
       run: |
-          aws lambda create-function --function-name test-function \
-            --code S3Bucket=my-bucket-artifacts-github-actions-1,S3Key=${{ github.repository }}/${{ github.sha }}.zip \
+          aws lambda create-function --function-name test-function-${{ matrix.input }} \
+            --code S3Bucket=my-bucket-artifacts-github-actions-2,S3Key=${{ github.repository }}/${{ github.sha }}.zip \
             --handler lambda_function.lambda_handler --runtime python3.9 \
             --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/my-lambda-role
+    - name: Invoke test function
+      run: |
+          aws lambda invoke --function-name test-function-${{ matrix.input }} \
+            --payload $(echo "{\"input\": \"${{ matrix.input }}\"}" | base64) \
+            --output json out 
+          if grep -q "Error" out; then
+            exit1
+          fi      
     - name: wait 30 seconds
       run: sleep 30
     - name: Destroy test function
@@ -104,6 +115,6 @@ jobs:
       run: |
           aws lambda update-function-code \
             --function-name my-function \
-            --s3-bucket my-bucket-artifacts-github-actions-1 \
+            --s3-bucket my-bucket-artifacts-github-actions-2 \
             --s3-key ${{ github.repository }}/${{ github.sha }}.zip \
             --publish
